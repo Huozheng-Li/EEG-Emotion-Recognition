@@ -1,0 +1,8 @@
+1.ssh
+Host AutoDL-V100-32GB
+    HostName region-46.seetacloud.com
+    User root
+    Port 54172
+
+2.AutoDL ssh
+ssh -p 54172 root@region-46.seetacloud.com

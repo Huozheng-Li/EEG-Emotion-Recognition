@@ -11,6 +11,9 @@ __pycache__/
 *.pyo
 .venv/
 
+# Claude local settings (keep in repo)
+.claude/settings.local.json
+
 # IDE
 .vscode/
 .idea/
