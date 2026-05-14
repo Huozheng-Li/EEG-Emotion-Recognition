@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c ' *)",
+      "Bash(python -c ' *)",
+      "Bash(pip list *)",
+      "Bash(/c/Python314/python -m pip install scipy openpyxl numpy -q)",
+      "Bash(/c/Python314/python -c ' *)",
+      "Bash(/c/Python314/python -m pip install h5py -q)",
+      "WebSearch"
+    ]
+  }
+}
