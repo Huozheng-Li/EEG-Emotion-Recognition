@@ -69,7 +69,7 @@ def extract_hjorth_features(epochs: np.ndarray) -> np.ndarray:
     """
     n_epochs, n_ch, _ = epochs.shape
     feats = np.zeros((n_epochs, n_ch * 3))
-    for i in range(n_epochs):
+    for i in tqdm(range(n_epochs), desc="  Hjorth", ncols=80):
         for c in range(n_ch):
             x = epochs[i, c, :]
             d1 = np.diff(x)

@@ -21,7 +21,8 @@
       "Bash(/d/Miniconda3/envs/11thbmedesign/python -m pip install mne scikit-learn tqdm seaborn -q)",
       "Bash(/d/Miniconda3/envs/11thbmedesign/python -c \"import torch; import mne; import sklearn; print\\(f'PyTorch {torch.__version__}, CUDA available: {torch.cuda.is_available\\(\\)}'\\); print\\(f'Device count: {torch.cuda.device_count\\(\\)}'\\)\")",
       "Bash(/d/Miniconda3/envs/11thbmedesign/python -c ' *)",
-      "Bash(/d/Miniconda3/envs/11thbmedesign/python -c \"import py_compile; py_compile.compile\\('src/train/finetune.py', doraise=True\\); print\\('OK'\\)\")"
+      "Bash(/d/Miniconda3/envs/11thbmedesign/python -c \"import py_compile; py_compile.compile\\('src/train/finetune.py', doraise=True\\); print\\('OK'\\)\")",
+      "Bash(git add *)"
     ],
     "additionalDirectories": [
       "f:\\COMPETITION\\eeg_emotion_recog\\src"

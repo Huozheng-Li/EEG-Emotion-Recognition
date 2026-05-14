@@ -5,6 +5,7 @@ Works on both DEAP (128 Hz) and Competition (250 Hz) data.
 import numpy as np
 from scipy import signal
 from sklearn.preprocessing import StandardScaler
+from tqdm import tqdm
 
 # EEG frequency bands
 BANDS = [(1, 4), (4, 8), (8, 14), (14, 31), (31, 50)]
@@ -97,7 +98,7 @@ def extract_de_features(epochs: np.ndarray, sfreq: float) -> np.ndarray:
     n_epochs, n_ch, _ = epochs.shape
     features = np.zeros((n_epochs, n_ch * len(bands)))
 
-    for i in range(n_epochs):
+    for i in tqdm(range(n_epochs), desc="  DE", ncols=80):
         for j, (low, high) in enumerate(bands):
             filtered = bandpass_filter(epochs[i], sfreq, low, high)
             var = filtered.var(axis=-1)
@@ -119,7 +120,7 @@ def extract_psd_features(epochs: np.ndarray, sfreq: float) -> np.ndarray:
     n_epochs, n_ch, _ = epochs.shape
     features = np.zeros((n_epochs, n_ch * len(bands)))
 
-    for i in range(n_epochs):
+    for i in tqdm(range(n_epochs), desc="  PSD", ncols=80):
         for c in range(n_ch):
             freqs, psd = signal.welch(epochs[i, c], fs=sfreq, nperseg=min(256, epochs.shape[-1]))
             for j, (low, high) in enumerate(bands):
