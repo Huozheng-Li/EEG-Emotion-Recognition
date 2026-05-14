@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, GroupKFold
 from pathlib import Path
 from tqdm import tqdm
 
@@ -181,16 +181,18 @@ def main():
     # ── Cross-validation ─────────────────────────────────────────
     pretrained_path = Path(args.pretrained) if args.pretrained.lower() != "none" else None
 
-    skf = StratifiedKFold(n_splits=args.n_folds, shuffle=True, random_state=42)
+    gkf = GroupKFold(n_splits=args.n_folds)
     fold_accs = []
 
     print(f"\n{'═'*80}")
-    print(f" Starting {args.n_folds}-fold cross-validation")
+    print(f" Starting {args.n_folds}-fold subject-wise cross-validation")
     print(f" Epochs: {args.epochs} | Patience: {FINETUNE['patience']} | "
           f"Batch: {args.batch_size}")
     print(f"{'═'*80}")
 
-    for fold, (train_idx, val_idx) in enumerate(skf.split(X, y), 1):
+    for fold, (train_idx, val_idx) in enumerate(gkf.split(X, y, groups=subj_ids), 1):
+        val_subjs = np.unique(subj_ids[val_idx])
+        print(f"  Fold {fold}: val subjects = {val_subjs.tolist()}")
         acc = run_fold(fold, train_idx, val_idx, X, y,
                        pretrained_path, device, args)
         fold_accs.append(acc)
