@@ -13,6 +13,7 @@ import numpy as np
 import h5py
 import scipy.io as sio
 from pathlib import Path
+from tqdm import tqdm
 
 from src.data.preprocessing import bandpass_filter, segment_epochs, standardize_epochs
 from src.config import TRAIN_DIR, TEST_DIR, COMP_SFREQ, TRIAL_LENGTH_SEC, \
@@ -81,21 +82,22 @@ def build_competition_dataset(cache: bool = True) -> tuple:
     for folder, group_id in [("正常人", 0), ("抑郁症患者", 1)]:
         folder_path = TRAIN_DIR / folder
         files = sorted(folder_path.glob("*.mat"))
-        for fpath in files:
+        for fpath in tqdm(files, desc=f"  Loading {folder}", ncols=80):
             X_s, y_s = process_competition_subject(fpath)
             X_list.append(X_s)
             y_list.append(y_s)
             subj_list.append(np.full(len(y_s), subj_counter, dtype=np.int16))
             group_list.append(np.full(len(y_s), group_id, dtype=np.int16))
-            print(f"  {folder}/{fpath.name}: {len(y_s)} epochs")
             subj_counter += 1
 
+    print("  Concatenating...")
     X = np.concatenate(X_list, axis=0)
     y = np.concatenate(y_list, axis=0)
     subj = np.concatenate(subj_list, axis=0)
     groups = np.concatenate(group_list, axis=0)
 
     if cache:
+        print("  Caching to disk...")
         np.savez_compressed(cache_file, X=X, y=y,
                             subject_ids=subj, groups=groups)
         print(f"[COMP] Cached {len(y)} epochs to {cache_file}")

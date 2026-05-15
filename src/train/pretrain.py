@@ -1,75 +1,66 @@
 """
 Pretrain TSception on DEAP dataset.
-
-Saves checkpoint to checkpoints/tsception_deap_pretrain.pt for
-subsequent fine-tuning on the competition dataset.
+Saves to checkpoints/tsception_deap_pretrain.pt for fine-tuning.
 """
 import sys
 import argparse
+import time
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
 from pathlib import Path
+from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.config import (
-    CHECKPOINT_DIR, PRETRAIN, TSCEPTION, COMP_SFREQ, N_CHANNELS,
+    CHECKPOINT_DIR, PRETRAIN, TSCEPTION, COMP_SFREQ, N_CHANNELS, DEAP_SFREQ,
 )
-from src.models.tsception import TSception
+from src.models.tsception import TSception, count_parameters
 from src.data.deap_dataset import build_deap_dataset
 
 
-def create_dataloaders(X, y, batch_size: int, val_split: float,
-                       num_workers: int = 0):
-    """Split into train/val and create DataLoaders."""
-    # Stratified split
-    X_train, X_val, y_train, y_val = train_test_split(
-        X, y, test_size=val_split, stratify=y, random_state=42
-    )
-
-    train_ds = TensorDataset(torch.from_numpy(X_train), torch.from_numpy(y_train))
-    val_ds = TensorDataset(torch.from_numpy(X_val), torch.from_numpy(y_val))
-
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
-                              num_workers=num_workers, pin_memory=True,
-                              drop_last=True)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False,
-                            num_workers=num_workers, pin_memory=True)
-
-    return train_loader, val_loader
+def gpu_mem() -> str:
+    if torch.cuda.is_available():
+        used = torch.cuda.memory_allocated() / 1024**3
+        total = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        return f"{used:.1f}G/{total:.0f}G"
+    return "N/A"
 
 
-def train_epoch(model, loader, optimizer, criterion, device):
+def train_epoch(model, loader, optimizer, criterion, device, pbar_desc="train"):
     model.train()
     total_loss, correct, total = 0, 0, 0
-    for X_batch, y_batch in loader:
+    pbar = tqdm(loader, desc=pbar_desc, leave=False, ncols=100)
+    for X_batch, y_batch in pbar:
         X_batch, y_batch = X_batch.to(device), y_batch.to(device)
         optimizer.zero_grad()
         logits = model(X_batch)
         loss = criterion(logits, y_batch)
         loss.backward()
         optimizer.step()
-
         total_loss += loss.item() * len(y_batch)
         correct += (logits.argmax(1) == y_batch).sum().item()
         total += len(y_batch)
+        pbar.set_postfix({"loss": f"{loss.item():.3f}", "acc": f"{correct / total:.2%}"})
     return total_loss / total, correct / total
 
 
 @torch.no_grad()
-def evaluate(model, loader, criterion, device):
+def evaluate(model, loader, criterion, device, pbar_desc="val"):
     model.eval()
     total_loss, correct, total = 0, 0, 0
-    for X_batch, y_batch in loader:
+    pbar = tqdm(loader, desc=pbar_desc, leave=False, ncols=100)
+    for X_batch, y_batch in pbar:
         X_batch, y_batch = X_batch.to(device), y_batch.to(device)
         logits = model(X_batch)
         loss = criterion(logits, y_batch)
         total_loss += loss.item() * len(y_batch)
         correct += (logits.argmax(1) == y_batch).sum().item()
         total += len(y_batch)
+        pbar.set_postfix({"loss": f"{loss.item():.3f}", "acc": f"{correct / total:.2%}"})
     return total_loss / total, correct / total
 
 
@@ -83,14 +74,16 @@ def main():
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[PRETRAIN] Device: {device}")
+    gpu_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"
+    print(f"Device: {device} ({gpu_name})")
 
     # ── Load DEAP ───────────────────────────────────────────────
     deap_dir = Path(args.deap_dir) if args.deap_dir else None
     X, y, _ = build_deap_dataset(deap_dir)
 
     n_times = X.shape[-1]
-    print(f"[PRETRAIN] DEAP data: {X.shape}, pos={y.mean():.3f}")
+    print(f"DEAP data: {X.shape[0]} epochs x {X.shape[1]}ch x {X.shape[2]}pt | "
+          f"pos={y.mean():.1%}")
 
     train_loader, val_loader = create_dataloaders(
         X, y, args.batch_size, PRETRAIN["val_split"], PRETRAIN["num_workers"]
@@ -98,45 +91,44 @@ def main():
 
     # ── Model ───────────────────────────────────────────────────
     model = TSception(
-        n_channels=N_CHANNELS,
-        n_times=n_times,
-        num_T=TSCEPTION["num_T"],
-        num_S=TSCEPTION["num_S"],
+        n_channels=N_CHANNELS, n_times=n_times,
+        num_T=TSCEPTION["num_T"], num_S=TSCEPTION["num_S"],
         hid_channels=TSCEPTION["hid_channels"],
         num_classes=TSCEPTION["num_classes"],
         dropout=TSCEPTION["dropout"],
-        sampling_rate=128,  # DEAP sampling rate
+        sampling_rate=DEAP_SFREQ,
     ).to(device)
 
-    print(f"[PRETRAIN] Model params: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
+    n_params = count_parameters(model)
+    print(f"Model: TSception, {n_params:,} params | Batch: {args.batch_size} | "
+          f"LR: {args.lr} | GPU: {gpu_mem()}")
 
-    # ── Optimizer & Loss ────────────────────────────────────────
-    optimizer = torch.optim.AdamW(
-        model.parameters(), lr=args.lr,
-        weight_decay=PRETRAIN["weight_decay"]
-    )
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=args.epochs
-    )
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,
+                                  weight_decay=PRETRAIN["weight_decay"])
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
     criterion = nn.CrossEntropyLoss()
 
-    # ── Training Loop ───────────────────────────────────────────
+    # ── Training ────────────────────────────────────────────────
     best_val_acc = 0
     patience_counter = 0
     best_path = CHECKPOINT_DIR / "tsception_deap_pretrain.pt"
 
+    print(f"\n{'─'*60}")
+    print(f"{'Epoch':>5} {'train_loss':>10} {'train_acc':>10} "
+          f"{'val_loss':>10} {'val_acc':>10} {'lr':>8}  {'best':>10}")
+    print(f"{'─'*60}")
+
+    t_start = time.time()
     for epoch in range(1, args.epochs + 1):
-        train_loss, train_acc = train_epoch(model, train_loader, optimizer,
-                                            criterion, device)
-        val_loss, val_acc = evaluate(model, val_loader, criterion, device)
+        train_loss, train_acc = train_epoch(
+            model, train_loader, optimizer, criterion, device,
+            pbar_desc=f"Pretrain E{epoch:02d}")
+        val_loss, val_acc = evaluate(
+            model, val_loader, criterion, device,
+            pbar_desc=f"PreVal   E{epoch:02d}")
         scheduler.step()
 
-        if epoch % 5 == 0 or epoch == 1:
-            print(f"  Epoch {epoch:3d}/{args.epochs} | "
-                  f"train_loss={train_loss:.4f} train_acc={train_acc:.3%} | "
-                  f"val_loss={val_loss:.4f} val_acc={val_acc:.3%} | "
-                  f"lr={scheduler.get_last_lr()[0]:.2e}")
-
+        marker = " *" if val_acc > best_val_acc else ""
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             patience_counter = 0
@@ -149,12 +141,32 @@ def main():
             }, best_path)
         else:
             patience_counter += 1
-            if patience_counter >= PRETRAIN["patience"]:
-                print(f"[PRETRAIN] Early stopping at epoch {epoch}")
-                break
 
-    print(f"[PRETRAIN] Best val acc: {best_val_acc:.3%}")
-    print(f"[PRETRAIN] Model saved to {best_path}")
+        print(f"{epoch:5d} {train_loss:10.4f} {train_acc:9.2%} "
+              f"{val_loss:10.4f} {val_acc:9.2%} "
+              f"{scheduler.get_last_lr()[0]:8.2e}  {best_val_acc:9.2%}{marker}")
+
+        if patience_counter >= PRETRAIN["patience"]:
+            print(f"Early stopping @ epoch {epoch}")
+            break
+
+    elapsed = time.time() - t_start
+    print(f"{'─'*60}")
+    print(f"Done in {elapsed/60:.1f}min | Best val_acc: {best_val_acc:.2%}")
+    print(f"Saved to {best_path}")
+
+
+def create_dataloaders(X, y, batch_size, val_split, num_workers=0):
+    X_train, X_val, y_train, y_val = train_test_split(
+        X, y, test_size=val_split, stratify=y, random_state=42
+    )
+    train_ds = TensorDataset(torch.from_numpy(X_train), torch.from_numpy(y_train))
+    val_ds = TensorDataset(torch.from_numpy(X_val), torch.from_numpy(y_val))
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
+                              num_workers=num_workers, pin_memory=True, drop_last=True)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False,
+                            num_workers=num_workers, pin_memory=True)
+    return train_loader, val_loader
 
 
 if __name__ == "__main__":

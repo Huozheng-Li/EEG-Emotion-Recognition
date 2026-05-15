@@ -11,6 +11,7 @@ We use valence > threshold → positive (1), else neutral (0).
 import pickle
 import numpy as np
 from pathlib import Path
+from tqdm import tqdm
 from sklearn.preprocessing import StandardScaler
 
 from src.data.preprocessing import bandpass_filter, segment_epochs, standardize_epochs
@@ -106,25 +107,26 @@ def build_deap_dataset(deap_dir: Path = None, cache: bool = True) -> tuple:
         return cached["X"], cached["y"], cached["subject_ids"]
 
     X_list, y_list, subj_list = [], [], []
-    for subj_id in range(1, 33):
+    for subj_id in tqdm(range(1, 33), desc="  Loading DEAP subjects", ncols=80):
         try:
             X_s, y_s = process_deap_subject(subj_id, deap_dir)
             X_list.append(X_s)
             y_list.append(y_s)
             subj_list.append(np.full(len(y_s), subj_id, dtype=np.int16))
-            print(f"  DEAP s{subj_id:02d}: {len(y_s)} epochs, "
-                  f"pos={y_s.mean():.2%}")
+            print(f"    s{subj_id:02d}: {len(y_s)} epochs, pos={y_s.mean():.2%}")
         except FileNotFoundError:
-            print(f"  DEAP s{subj_id:02d}: file not found, skipping...")
+            print(f"    s{subj_id:02d}: file not found, skipping...")
 
     if not X_list:
         raise RuntimeError("No DEAP data loaded. Place .dat files in data/DEAP/")
 
+    print("  Concatenating...")
     X = np.concatenate(X_list, axis=0)
     y = np.concatenate(y_list, axis=0)
     subj = np.concatenate(subj_list, axis=0)
 
     if cache:
+        print("  Caching to disk...")
         np.savez_compressed(cache_file, X=X, y=y, subject_ids=subj)
         print(f"[DEAP] Cached {len(y)} epochs to {cache_file}")
 
