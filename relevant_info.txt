@@ -6,3 +6,4 @@ Host AutoDL-V100-32GB
 
 2.AutoDL ssh
 ssh -p 54172 root@region-46.seetacloud.com
+0GtVZAy232jF
