@@ -122,6 +122,7 @@ def run_fold(fold: int, train_idx, val_idx, X, y, pretrained_path: Path,
     best_val_acc = 0
     patience_counter = 0
     t_start = time.time()
+    history = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": []}
 
     for epoch in range(1, args.epochs + 1):
         train_loss, train_acc = train_epoch(
@@ -131,6 +132,11 @@ def run_fold(fold: int, train_idx, val_idx, X, y, pretrained_path: Path,
             model, val_loader, criterion, device,
             pbar_desc=f"Fold{fold} E{epoch:02d} val  ")
         scheduler.step()
+
+        history["train_loss"].append(train_loss)
+        history["train_acc"].append(train_acc)
+        history["val_loss"].append(val_loss)
+        history["val_acc"].append(val_acc)
 
         marker = " *" if val_acc > best_val_acc else ""
         if val_acc > best_val_acc:
@@ -151,6 +157,17 @@ def run_fold(fold: int, train_idx, val_idx, X, y, pretrained_path: Path,
     print(f"{'─'*80}")
     print(f" Fold {fold} done | best_val_acc={best_val_acc:.2%} | "
           f"time={elapsed/60:.1f}min")
+
+    # Save training history for plotting
+    logs_dir = CHECKPOINT_DIR / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(logs_dir / f"finetune_fold{fold}.npz",
+                        train_loss=history["train_loss"],
+                        train_acc=history["train_acc"],
+                        val_loss=history["val_loss"],
+                        val_acc=history["val_acc"],
+                        best_val_acc=best_val_acc)
+    print(f"  History saved to {logs_dir / f'finetune_fold{fold}.npz'}")
     print(f"{'═'*80}")
     return best_val_acc
 

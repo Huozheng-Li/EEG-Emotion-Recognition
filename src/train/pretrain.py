@@ -119,6 +119,7 @@ def main():
     print(f"{'─'*60}")
 
     t_start = time.time()
+    history = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": []}
     for epoch in range(1, args.epochs + 1):
         train_loss, train_acc = train_epoch(
             model, train_loader, optimizer, criterion, device,
@@ -127,6 +128,11 @@ def main():
             model, val_loader, criterion, device,
             pbar_desc=f"PreVal   E{epoch:02d}")
         scheduler.step()
+
+        history["train_loss"].append(train_loss)
+        history["train_acc"].append(train_acc)
+        history["val_loss"].append(val_loss)
+        history["val_acc"].append(val_acc)
 
         marker = " *" if val_acc > best_val_acc else ""
         if val_acc > best_val_acc:
@@ -154,6 +160,17 @@ def main():
     print(f"{'─'*60}")
     print(f"Done in {elapsed/60:.1f}min | Best val_acc: {best_val_acc:.2%}")
     print(f"Saved to {best_path}")
+
+    # Save training history for plotting
+    logs_dir = CHECKPOINT_DIR / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(logs_dir / "pretrain_history.npz",
+                        epochs=np.arange(1, len(history["train_loss"]) + 1),
+                        train_loss=history["train_loss"],
+                        train_acc=history["train_acc"],
+                        val_loss=history["val_loss"],
+                        val_acc=history["val_acc"])
+    print(f"History saved to {logs_dir / 'pretrain_history.npz'}")
 
 
 def create_dataloaders(X, y, batch_size, val_split, num_workers=0):

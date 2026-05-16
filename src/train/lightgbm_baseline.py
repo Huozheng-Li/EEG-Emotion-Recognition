@@ -163,6 +163,8 @@ def main():
     print(f"n_estimators={args.n_estimators}, lr={args.lr}, "
           f"num_leaves={args.num_leaves}")
 
+    all_importances = []
+
     for fold, (train_idx, val_idx) in enumerate(
         gkf.split(X_feat, y, groups=subj_ids), 1
     ):
@@ -172,6 +174,7 @@ def main():
         acc, model = train_fold(fold, train_idx, val_idx,
                                 X_feat, y, lgb_params)
         fold_accs.append(acc)
+        all_importances.append(model.feature_importances_)
 
         # Top features
         importance = model.feature_importances_
@@ -181,6 +184,14 @@ def main():
         )
         print(f"    acc={acc:.2%} | top features: {top_str}")
 
+    # Save per-fold results for plotting
+    logs_dir = CHECKPOINT_DIR / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    np.savez(logs_dir / "lightgbm_results.npz",
+             fold_accs=np.array(fold_accs),
+             feature_names=np.array(feature_names),
+             importances=np.array(all_importances))
+    print(f"  Results saved to {logs_dir / 'lightgbm_results.npz'}")
     print(f"\nCV: {[f'{a:.2%}' for a in fold_accs]}")
     print(f"Mean: {np.mean(fold_accs):.2%}  Std: {np.std(fold_accs):.2%}")
 
