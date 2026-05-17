@@ -19,8 +19,8 @@ PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 N_CHANNELS = 30
 DEAP_SFREQ = 128        # DEAP sampling rate
 COMP_SFREQ = 250        # Competition sampling rate
-TRIAL_LENGTH_SEC = 5    # Segment length in seconds
-STRIDE_SEC = 2.5        # Sliding window stride (50% overlap)
+TRIAL_LENGTH_SEC = 10    # Segment length in seconds (matching test set format)
+STRIDE_SEC = 10          # Non-overlapping (each video segment = one trial)
 BANDPASS_LOW = 0.5
 BANDPASS_HIGH = 50.0
 
