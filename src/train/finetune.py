@@ -267,7 +267,7 @@ def main():
         if epoch % 10 == 0:
             print(f"  Final Epoch {epoch:3d}: loss={loss:.4f} acc={acc:.2%}")
 
-    final_path = CHECKPOINT_DIR / "tsception_competition_final.pt"
+    final_path = CHECKPOINT_DIR / f"{args.model}_competition_final.pt"
     torch.save({"model_state_dict": final_model.state_dict(), "config": TSCEPTION}, final_path)
     print(f"Final model saved to {final_path}")
 
