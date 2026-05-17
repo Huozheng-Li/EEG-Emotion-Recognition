@@ -125,9 +125,14 @@ def main():
         # Soft voting ensemble on each 5s sub-epoch
         ensemble_probs = (eegnet_probs + lgb_probs) / 2.0  # (16, 2)
 
-        # Average every 2 consecutive sub-epochs → 8 trial predictions
-        trial_probs = ensemble_probs.reshape(8, 2, 2).mean(axis=1)  # (8, 2)
-        preds = np.argmax(trial_probs, axis=1)  # 0 or 1
+        # Average every 2 consecutive sub-epochs → 8 trial probabilities
+        trial_pos_probs = ensemble_probs.reshape(8, 2, 2).mean(axis=1)[:, 1]  # (8,)
+
+        # Each test subject has exactly 4 positive + 4 negative videos.
+        # Pick top 4 highest positive-prob trials as positive.
+        preds = np.zeros(8, dtype=int)
+        top4_idx = np.argsort(trial_pos_probs)[-4:]  # indices of 4 highest
+        preds[top4_idx] = 1
 
         for t in range(8):
             rows.append([user_id, t + 1, int(preds[t])])
