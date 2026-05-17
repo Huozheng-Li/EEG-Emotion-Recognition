@@ -34,6 +34,13 @@ TSCEPTION = {
     "num_classes": 2,
 }
 
+EEGNET = {
+    "F1": 8,                   # Temporal filters
+    "D": 2,                    # Depth multiplier
+    "dropout": 0.5,
+    "num_classes": 2,
+}
+
 # ── Training: Pretrain on DEAP ──────────────────────────────────────
 PRETRAIN = {
     "batch_size": 64,

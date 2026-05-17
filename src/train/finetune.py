@@ -16,9 +16,27 @@ from tqdm import tqdm
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.config import (
-    CHECKPOINT_DIR, FINETUNE, TSCEPTION, COMP_SFREQ, N_CHANNELS,
+    CHECKPOINT_DIR, FINETUNE, TSCEPTION, EEGNET, COMP_SFREQ, N_CHANNELS,
 )
-from src.models.tsception import TSception, count_parameters
+from src.models.tsception import TSception
+from src.models.eegnet import EEGNet
+
+
+def build_model(model_name: str, n_channels: int, n_times: int, num_classes: int,
+                sampling_rate: int):
+    if model_name == "eegnet":
+        return EEGNet(n_channels=n_channels, n_times=n_times, n_classes=num_classes,
+                      F1=EEGNET["F1"], D=EEGNET["D"], dropout=EEGNET["dropout"])
+    else:
+        return TSception(n_channels=n_channels, n_times=n_times,
+                         num_T=TSCEPTION["num_T"], num_S=TSCEPTION["num_S"],
+                         hid_channels=TSCEPTION["hid_channels"],
+                         num_classes=num_classes, dropout=TSCEPTION["dropout"],
+                         sampling_rate=sampling_rate)
+
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 from src.data.competition_dataset import build_competition_dataset
 
 
@@ -65,7 +83,7 @@ def evaluate(model, loader, criterion, device, pbar_desc="val"):
 
 
 def run_fold(fold: int, train_idx, val_idx, X, y, pretrained_path: Path,
-             device, args):
+             device, args, model_name: str = "tsception"):
     X_train, y_train = X[train_idx], y[train_idx]
     X_val, y_val = X[val_idx], y[val_idx]
 
@@ -80,14 +98,8 @@ def run_fold(fold: int, train_idx, val_idx, X, y, pretrained_path: Path,
                             num_workers=FINETUNE["num_workers"], pin_memory=True)
 
     n_times = X.shape[-1]
-    model = TSception(
-        n_channels=N_CHANNELS, n_times=n_times,
-        num_T=TSCEPTION["num_T"], num_S=TSCEPTION["num_S"],
-        hid_channels=TSCEPTION["hid_channels"],
-        num_classes=TSCEPTION["num_classes"],
-        dropout=TSCEPTION["dropout"],
-        sampling_rate=COMP_SFREQ,
-    ).to(device)
+    model = build_model(model_name, N_CHANNELS, n_times,
+                        TSCEPTION["num_classes"], COMP_SFREQ).to(device)
 
     n_params = count_parameters(model)
 
@@ -177,6 +189,8 @@ def main():
     parser.add_argument("--pretrained", type=str,
                         default=str(CHECKPOINT_DIR / "tsception_deap_pretrain.pt"),
                         help="Path to pretrained weights (set to 'none' to skip)")
+    parser.add_argument("--model", type=str, default="tsception",
+                        choices=["tsception", "eegnet"])
     parser.add_argument("--epochs", type=int, default=FINETUNE["epochs"])
     parser.add_argument("--batch_size", type=int, default=FINETUNE["batch_size"])
     parser.add_argument("--lr", type=float, default=FINETUNE["lr"])
@@ -211,7 +225,7 @@ def main():
         val_subjs = np.unique(subj_ids[val_idx])
         print(f"  Fold {fold}: val subjects = {val_subjs.tolist()}")
         acc = run_fold(fold, train_idx, val_idx, X, y,
-                       pretrained_path, device, args)
+                       pretrained_path, device, args, args.model)
         fold_accs.append(acc)
 
     print(f"\n{'═'*80}")
@@ -223,14 +237,8 @@ def main():
     # ── Train final model ────────────────────────────────────────
     print("\nTraining final model on all data for inference...")
     n_times = X.shape[-1]
-    final_model = TSception(
-        n_channels=N_CHANNELS, n_times=n_times,
-        num_T=TSCEPTION["num_T"], num_S=TSCEPTION["num_S"],
-        hid_channels=TSCEPTION["hid_channels"],
-        num_classes=TSCEPTION["num_classes"],
-        dropout=TSCEPTION["dropout"],
-        sampling_rate=COMP_SFREQ,
-    ).to(device)
+    final_model = build_model(args.model, N_CHANNELS, n_times,
+                              TSCEPTION["num_classes"], COMP_SFREQ).to(device)
 
     if pretrained_path and pretrained_path.exists():
         ckpt = torch.load(pretrained_path, map_location=device, weights_only=True)

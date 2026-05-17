@@ -6,23 +6,35 @@ set -e
 cd /root/autodl-tmp/eeg_emotion_recog
 source activate eeg
 
-echo "===== [1/4] DEAP Pretrain ====="
-python -m src.train.pretrain
+echo "===== [1/6] EEGNet DEAP Pretrain ====="
+python -m src.train.pretrain --model eegnet
 echo "Done."
 
-echo "===== [2/4] TSception from scratch ====="
-python -m src.train.finetune --pretrained none
+echo "===== [2/6] EEGNet from scratch ====="
+python -m src.train.finetune --model eegnet --pretrained none
+mkdir -p checkpoints/logs_eegnet_scratch
+mv checkpoints/logs/finetune_fold*.npz checkpoints/logs_eegnet_scratch/ 2>/dev/null
+echo "Done."
+
+echo "===== [3/6] EEGNet + DEAP Finetune ====="
+python -m src.train.finetune --model eegnet --pretrained checkpoints/eegnet_deap_pretrain.pt
+mkdir -p checkpoints/logs_eegnet_pretrained
+mv checkpoints/logs/finetune_fold*.npz checkpoints/logs_eegnet_pretrained/ 2>/dev/null
+echo "Done."
+
+echo "===== [4/6] TSception from scratch ====="
+python -m src.train.finetune --model tsception --pretrained none
 mkdir -p checkpoints/logs_scratch
 mv checkpoints/logs/finetune_fold*.npz checkpoints/logs_scratch/ 2>/dev/null
 echo "Done."
 
-echo "===== [3/4] TSception + DEAP Finetune ====="
-python -m src.train.finetune --pretrained checkpoints/tsception_deap_pretrain.pt
+echo "===== [5/6] TSception + DEAP Finetune ====="
+python -m src.train.finetune --model tsception --pretrained checkpoints/tsception_deap_pretrain.pt
 mkdir -p checkpoints/logs_pretrained
 mv checkpoints/logs/finetune_fold*.npz checkpoints/logs_pretrained/ 2>/dev/null
 echo "Done."
 
-echo "===== [4/4] LightGBM ====="
+echo "===== [6/6] LightGBM ====="
 python -m src.train.lightgbm_baseline
 echo "Done."
 

@@ -16,9 +16,27 @@ from tqdm import tqdm
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.config import (
-    CHECKPOINT_DIR, PRETRAIN, TSCEPTION, COMP_SFREQ, N_CHANNELS, DEAP_SFREQ,
+    CHECKPOINT_DIR, PRETRAIN, TSCEPTION, EEGNET, COMP_SFREQ, N_CHANNELS, DEAP_SFREQ,
 )
-from src.models.tsception import TSception, count_parameters
+from src.models.tsception import TSception
+from src.models.eegnet import EEGNet
+
+
+def build_model(model_name: str, n_channels: int, n_times: int, num_classes: int,
+                sampling_rate: int):
+    if model_name == "eegnet":
+        return EEGNet(n_channels=n_channels, n_times=n_times, n_classes=num_classes,
+                      F1=EEGNET["F1"], D=EEGNET["D"], dropout=EEGNET["dropout"])
+    else:
+        return TSception(n_channels=n_channels, n_times=n_times,
+                         num_T=TSCEPTION["num_T"], num_S=TSCEPTION["num_S"],
+                         hid_channels=TSCEPTION["hid_channels"],
+                         num_classes=num_classes, dropout=TSCEPTION["dropout"],
+                         sampling_rate=sampling_rate)
+
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 from src.data.deap_dataset import build_deap_dataset
 
 
@@ -68,6 +86,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--deap_dir", type=str, default=None,
                         help="Path to DEAP .dat files")
+    parser.add_argument("--model", type=str, default="tsception",
+                        choices=["tsception", "eegnet"])
     parser.add_argument("--epochs", type=int, default=PRETRAIN["epochs"])
     parser.add_argument("--batch_size", type=int, default=PRETRAIN["batch_size"])
     parser.add_argument("--lr", type=float, default=PRETRAIN["lr"])
@@ -90,14 +110,8 @@ def main():
     )
 
     # ── Model ───────────────────────────────────────────────────
-    model = TSception(
-        n_channels=N_CHANNELS, n_times=n_times,
-        num_T=TSCEPTION["num_T"], num_S=TSCEPTION["num_S"],
-        hid_channels=TSCEPTION["hid_channels"],
-        num_classes=TSCEPTION["num_classes"],
-        dropout=TSCEPTION["dropout"],
-        sampling_rate=DEAP_SFREQ,
-    ).to(device)
+    model = build_model(args.model, N_CHANNELS, n_times,
+                        TSCEPTION["num_classes"], DEAP_SFREQ).to(device)
 
     n_params = count_parameters(model)
     print(f"Model: TSception, {n_params:,} params | Batch: {args.batch_size} | "
@@ -111,7 +125,7 @@ def main():
     # ── Training ────────────────────────────────────────────────
     best_val_acc = 0
     patience_counter = 0
-    best_path = CHECKPOINT_DIR / "tsception_deap_pretrain.pt"
+    best_path = CHECKPOINT_DIR / f"{args.model}_deap_pretrain.pt"
 
     print(f"\n{'─'*60}")
     print(f"{'Epoch':>5} {'train_loss':>10} {'train_acc':>10} "
