@@ -59,7 +59,7 @@ def preprocess_test_subject(filepath: Path) -> np.ndarray:
     data = bandpass_filter(data, COMP_SFREQ, BANDPASS_LOW, BANDPASS_HIGH)
     # Cut into 16 fixed 5s segments (no overlap): 20000 / 1250 = 16
     n_times = data.shape[1]
-    trial_samples = int(TRIAL_LENGTH_SEC * COMP_SFREQ)  # 1250
+    trial_samples = 1250  # Hard-coded 5s at 250Hz (model was trained on 5s)
     epochs = []
     for start in range(0, n_times, trial_samples):
         epoch = data[:, start:start + trial_samples]  # (30, 1250)
@@ -88,7 +88,7 @@ def main():
     # ── Load models ─────────────────────────────────────────────
     print("Loading models...")
     # EEGNet
-    eegnet = EEGNet(n_channels=N_CHANNELS, n_times=int(TRIAL_LENGTH_SEC * COMP_SFREQ),
+    eegnet = EEGNet(n_channels=N_CHANNELS, n_times=1250,  # 5s at 250Hz — must match training
                     n_classes=2, F1=EEGNET["F1"], D=EEGNET["D"],
                     dropout=EEGNET["dropout"]).to(device)
     ckpt = torch.load(args.eegnet_ckpt, map_location=device, weights_only=True)
