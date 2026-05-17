@@ -42,7 +42,13 @@ def extract_hjorth(epochs):
 
 
 def preprocess_test_subject(filepath: Path) -> np.ndarray:
-    """Load and preprocess one test subject → standardized epochs."""
+    """
+    Load and preprocess one test subject.
+    Test data: 8 video clips × 10s = 20000 samples.
+    We split each 10s clip into 2 non-overlapping 5s sub-epochs,
+    then average predictions per clip to get 8 trial predictions.
+    Returns: (16, 30, 1250) — 16 five-second epochs.
+    """
     import scipy.io as sio
     mat = sio.loadmat(filepath)
     for k, v in mat.items():
@@ -51,8 +57,15 @@ def preprocess_test_subject(filepath: Path) -> np.ndarray:
             break
     # data: (30, 20000)
     data = bandpass_filter(data, COMP_SFREQ, BANDPASS_LOW, BANDPASS_HIGH)
-    data_t = data.T  # (20000, 30)
-    epochs = segment_epochs(data_t, COMP_SFREQ, TRIAL_LENGTH_SEC, STRIDE_SEC)
+    # Cut into 16 fixed 5s segments (no overlap): 20000 / 1250 = 16
+    n_times = data.shape[1]
+    trial_samples = int(TRIAL_LENGTH_SEC * COMP_SFREQ)  # 1250
+    epochs = []
+    for start in range(0, n_times, trial_samples):
+        epoch = data[:, start:start + trial_samples]  # (30, 1250)
+        if epoch.shape[1] == trial_samples:
+            epochs.append(epoch)
+    epochs = np.stack(epochs, axis=0)  # (16, 30, 1250)
     epochs = standardize_epochs(epochs)
     return epochs.astype(np.float32)
 
@@ -94,27 +107,29 @@ def main():
     rows = []
     for fpath in tqdm(test_files, desc="Processing test subjects", ncols=80):
         user_id = fpath.stem  # e.g., "P_test1"
-        epochs = preprocess_test_subject(fpath)  # (n_trials, 30, 1250)
-        n_trials = len(epochs)
+        epochs = preprocess_test_subject(fpath)  # (16, 30, 1250) — 8 trials × 2 halves
 
         # EEGNet predictions
         X_tensor = torch.from_numpy(epochs).to(device)
         with torch.no_grad():
             logits = eegnet(X_tensor)
-            eegnet_probs = torch.softmax(logits, dim=1).cpu().numpy()  # (N, 2)
+            eegnet_probs = torch.softmax(logits, dim=1).cpu().numpy()  # (16, 2)
 
-        # LightGBM predictions (need 390-dim features)
+        # LightGBM predictions
         de = extract_de_features(epochs, COMP_SFREQ)
         psd = extract_psd_features(epochs, COMP_SFREQ)
         hj = extract_hjorth(epochs)
         feats = np.concatenate([de, psd, hj], axis=1).astype(np.float32)
-        lgb_probs = lgb_model.predict_proba(feats)  # (N, 2)
+        lgb_probs = lgb_model.predict_proba(feats)  # (16, 2)
 
-        # Soft voting ensemble
-        ensemble_probs = (eegnet_probs + lgb_probs) / 2.0
-        preds = np.argmax(ensemble_probs, axis=1)  # 0 or 1
+        # Soft voting ensemble on each 5s sub-epoch
+        ensemble_probs = (eegnet_probs + lgb_probs) / 2.0  # (16, 2)
 
-        for t in range(n_trials):
+        # Average every 2 consecutive sub-epochs → 8 trial predictions
+        trial_probs = ensemble_probs.reshape(8, 2, 2).mean(axis=1)  # (8, 2)
+        preds = np.argmax(trial_probs, axis=1)  # 0 or 1
+
+        for t in range(8):
             rows.append([user_id, t + 1, int(preds[t])])
 
     # ── Write submission ────────────────────────────────────────
@@ -127,9 +142,8 @@ def main():
 
     # Stats
     labels = np.array([r[2] for r in rows])
-    print(f"\nSubmission: {len(rows)} trials → {args.output}")
+    print(f"\nSubmission: {len(rows)} trials (8 per subject × 10 subjects) → {args.output}")
     print(f"Predicted: pos={labels.mean():.1%} ({labels.sum()}/{len(labels)})")
-    print(f"Per subject trials: {len(rows) // len(test_files)}")
 
 
 if __name__ == "__main__":
