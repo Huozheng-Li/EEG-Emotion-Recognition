@@ -5,6 +5,9 @@ PROBLEM/
 # Model checkpoints
 checkpoints/
 
+# Paper
+report/
+
 # Python
 __pycache__/
 *.pyc
