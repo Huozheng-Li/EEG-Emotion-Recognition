@@ -6,7 +6,7 @@ PROBLEM/
 checkpoints/
 
 # Paper
-report/
+# report/
 
 # Python
 __pycache__/

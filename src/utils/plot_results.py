@@ -125,37 +125,74 @@ def plot_feature_importance(names: list, scores: list, top_n: int = 15,
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--logs_dir", type=str, default="checkpoints/logs")
+    parser.add_argument("--checkpoints_dir", type=str, default="checkpoints")
     parser.add_argument("--figures_dir", type=str, default="report/figures")
     args = parser.parse_args()
 
-    logs_dir = Path(args.logs_dir)
+    ckpt_dir = Path(args.checkpoints_dir)
     figures_dir = Path(args.figures_dir)
     figures_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. Pretraining curves
-    pretrain_log = logs_dir / "pretrain_history.npz"
+    # Helper to load folds from a subdirectory
+    def load_folds(subdir):
+        files = sorted(subdir.glob("finetune_fold*.npz"))
+        if not files:
+            return None
+        histories = [dict(np.load(f)) for f in files]
+        accs = [h["best_val_acc"] for h in histories]
+        return {"histories": histories, "accs": accs,
+                "mean": np.mean(accs), "std": np.std(accs)}
+
+    # 1. Pretraining curve
+    pretrain_log = ckpt_dir / "logs" / "pretrain_history.npz"
     if pretrain_log.exists():
         hist = np.load(pretrain_log)
         print(f"Plotting pretraining curves ({len(hist['epochs'])} epochs)")
         plot_pretrain_curve(dict(hist), figures_dir)
 
-    # 2. Finetuning folds
-    fold_files = sorted(logs_dir.glob("finetune_fold*.npz"))
-    if fold_files:
-        fold_histories = [dict(np.load(f)) for f in fold_files]
-        print(f"Plotting {len(fold_histories)} finetuning folds")
-        plot_finetune_folds(fold_histories, figures_dir)
+    # 2. Per-model finetune curves
+    for label, subdir in [
+        ("EEGNet scratch", "logs_eegnet_scratch"),
+        ("EEGNet + DEAP", "logs_eegnet_pretrained"),
+        ("TSception scratch", "logs_scratch"),
+        ("TSception + DEAP", "logs_pretrained"),
+    ]:
+        data = load_folds(ckpt_dir / subdir)
+        if data:
+            print(f"Plotting {label}: {len(data['histories'])} folds")
+            plot_finetune_folds(data["histories"], figures_dir)
 
-    # 3. CV comparison
-    results = {
-        "TSception\n(scratch)": {"mean": 0.5402, "std": 0.0084},
-        "TSception\n(DEAP pretrain)": {"mean": None, "std": None},  # update after run
-        "LightGBM\n(handcrafted)": {"mean": 0.6219, "std": 0.0191},
-    }
-    results = {k: v for k, v in results.items() if v["mean"] is not None}
-    if len(results) >= 2:
-        print("Plotting CV comparison")
+    # 3. LightGBM feature importance
+    lgb_log = ckpt_dir / "logs" / "lightgbm_results.npz"
+    if lgb_log.exists():
+        d = np.load(lgb_log)
+        mean_imp = d["importances"].mean(axis=0)
+        print(f"Plotting LightGBM feature importance ({len(mean_imp)} features)")
+        plot_feature_importance(list(d["feature_names"]), mean_imp, save_path=figures_dir)
+
+    # 4. CV comparison bar chart
+    results = {}
+    for label, subdir in [
+        ("EEGNet\nscratch", "logs_eegnet_scratch"),
+        ("EEGNet\n+ DEAP", "logs_eegnet_pretrained"),
+        ("TSception\nscratch", "logs_scratch"),
+        ("TSception\n+ DEAP", "logs_pretrained"),
+    ]:
+        data = load_folds(ckpt_dir / subdir)
+        if data:
+            results[label] = {"mean": data["mean"], "std": data["std"]}
+
+    # Add LightGBM from saved results
+    if lgb_log.exists():
+        d = np.load(lgb_log)
+        results["LightGBM\nhandcraft"] = {"mean": float(d["fold_accs"].mean()),
+                                           "std": float(d["fold_accs"].std())}
+
+    # Add ensemble (from last CV run)
+    results["EEGNet + LGB\nensemble"] = {"mean": 0.6346, "std": 0.0145}
+
+    if results:
+        print(f"Plotting CV comparison ({len(results)} models)")
         plot_cv_comparison(results, figures_dir)
 
     print(f"Figures saved to {figures_dir}")
