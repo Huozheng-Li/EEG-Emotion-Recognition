@@ -26,7 +26,11 @@
       "Bash(/d/Miniconda3/envs/11thbmedesign/python -c \"import py_compile; [py_compile.compile\\(f, doraise=True\\) for f in ['src/train/pretrain.py', 'src/data/competition_dataset.py', 'src/data/deap_dataset.py']]; print\\('OK'\\)\")",
       "Bash(/d/Miniconda3/envs/11thbmedesign/python -c \"import py_compile; [py_compile.compile\\(f, doraise=True\\) for f in ['src/train/pretrain.py', 'src/train/finetune.py', 'src/train/lightgbm_baseline.py']]; print\\('All OK'\\)\")",
       "Bash(/d/Miniconda3/envs/11thbmedesign/python -c \"import py_compile; [py_compile.compile\\(f, doraise=True\\) for f in ['src/models/eegnet.py', 'src/train/pretrain.py', 'src/train/finetune.py', 'src/config.py']]; print\\('All OK'\\)\")",
-      "Bash(/d/Miniconda3/envs/11thbmedesign/python -c \"import py_compile; py_compile.compile\\('src/train/inference.py', doraise=True\\); print\\('OK'\\)\")"
+      "Bash(/d/Miniconda3/envs/11thbmedesign/python -c \"import py_compile; py_compile.compile\\('src/train/inference.py', doraise=True\\); print\\('OK'\\)\")",
+      "PowerShell(D:\\\\Miniconda3\\\\envs\\\\11thbmedesign\\\\python -m src.utils.plot_architectures)",
+      "Bash(D:Miniconda3envs11thbmedesignpython -c ' *)",
+      "PowerShell(D:\\\\Miniconda3\\\\envs\\\\11thbmedesign\\\\python -m src.utils.plot_results)",
+      "PowerShell(D:\\\\Miniconda3\\\\envs\\\\11thbmedesign\\\\python -m src.utils.plot_results 2>&1)"
     ],
     "additionalDirectories": [
       "f:\\COMPETITION\\eeg_emotion_recog\\src"

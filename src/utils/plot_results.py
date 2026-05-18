@@ -36,9 +36,10 @@ def plot_pretrain_curve(history: dict, save_path: Path = None):
     ax2.legend(); ax2.grid(True, alpha=0.3)
 
     fig.suptitle("TSception Pretraining on DEAP", fontweight="bold")
+    fig.tight_layout(pad=0.3)
     if save_path:
-        fig.savefig(save_path / "pretrain_curves.pdf")
-        fig.savefig(save_path / "pretrain_curves.png")
+        fig.savefig(save_path / "pretrain_curves.pdf", bbox_inches="tight", pad_inches=0.02)
+        fig.savefig(save_path / "pretrain_curves.png", bbox_inches="tight", pad_inches=0.02)
     plt.close()
 
 
@@ -66,9 +67,10 @@ def plot_finetune_folds(fold_histories: list, save_path: Path = None):
         ax2.legend(); ax2.grid(True, alpha=0.3)
 
     fig.suptitle("TSception Finetuning (Competition)", fontweight="bold")
+    fig.tight_layout(pad=0.3)
     if save_path:
-        fig.savefig(save_path / "finetune_folds.pdf")
-        fig.savefig(save_path / "finetune_folds.png")
+        fig.savefig(save_path / "finetune_folds.pdf", bbox_inches="tight", pad_inches=0.02)
+        fig.savefig(save_path / "finetune_folds.png", bbox_inches="tight", pad_inches=0.02)
     plt.close()
 
 
@@ -92,9 +94,10 @@ def plot_cv_comparison(results: dict, save_path: Path = None):
                 f"{mean:.1%}", ha="center", fontweight="bold", fontsize=13)
 
     ax.set_title("Model Comparison — Subject-wise 5-Fold CV", fontweight="bold")
+    fig.tight_layout(pad=0.3)
     if save_path:
-        fig.savefig(save_path / "cv_comparison.pdf")
-        fig.savefig(save_path / "cv_comparison.png")
+        fig.savefig(save_path / "cv_comparison.pdf", bbox_inches="tight", pad_inches=0.02)
+        fig.savefig(save_path / "cv_comparison.png", bbox_inches="tight", pad_inches=0.02)
     plt.close()
 
 
@@ -115,11 +118,92 @@ def plot_feature_importance(names: list, scores: list, top_n: int = 15,
     ax.set_xlabel("Feature Importance Score")
     ax.set_title("LightGBM — Top Feature Importance", fontweight="bold")
     ax.invert_yaxis()
-
+    fig.tight_layout(pad=0.3)
     if save_path:
-        fig.savefig(save_path / "feature_importance.pdf")
-        fig.savefig(save_path / "feature_importance.png")
+        fig.savefig(save_path / "feature_importance.pdf", bbox_inches="tight", pad_inches=0.02)
+        fig.savefig(save_path / "feature_importance.png", bbox_inches="tight", pad_inches=0.02)
     plt.close()
+
+
+def plot_pretraining_ablation(ablation_data: dict, save_path: Path = None):
+    """Grouped bar chart: TSception/EEGNet scratch vs DEAP pretrained."""
+    fig, ax = plt.subplots(figsize=(8, 5))
+    models = ["TSception", "EEGNet"]
+    x = np.arange(len(models))
+    width = 0.35
+    scratch_vals = [ablation_data["TSception"]["scratch"]["mean"],
+                    ablation_data["EEGNet"]["scratch"]["mean"]]
+    scratch_err = [ablation_data["TSception"]["scratch"]["std"],
+                   ablation_data["EEGNet"]["scratch"]["std"]]
+    pretrain_vals = [ablation_data["TSception"]["pretrained"]["mean"],
+                     ablation_data["EEGNet"]["pretrained"]["mean"]]
+    pretrain_err = [ablation_data["TSception"]["pretrained"]["std"],
+                    ablation_data["EEGNet"]["pretrained"]["std"]]
+    bars1 = ax.bar(x - width/2, scratch_vals, width, yerr=scratch_err,
+                   label="Scratch", color="#3498db", capsize=6, edgecolor="black", linewidth=0.6)
+    bars2 = ax.bar(x + width/2, pretrain_vals, width, yerr=pretrain_err,
+                   label="DEAP Pretrained", color="#e74c3c", capsize=6, edgecolor="black", linewidth=0.6)
+    ax.axhline(y=0.5, color="gray", linestyle="--", alpha=0.4, linewidth=1)
+    ax.set_xticks(x)
+    ax.set_xticklabels(models, fontsize=13)
+    ax.set_ylabel("5-fold CV Accuracy", fontsize=13)
+    ax.set_ylim(0.48, max(max(scratch_vals), max(pretrain_vals)) + 0.08)
+    ax.legend(fontsize=11, loc="lower right")
+    for bar, val in zip(bars1, scratch_vals):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.008,
+                f"{val:.1%}", ha="center", fontsize=11, fontweight="bold")
+    for bar, val in zip(bars2, pretrain_vals):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.008,
+                f"{val:.1%}", ha="center", fontsize=11, fontweight="bold")
+    ax.set_title("Ablation — Pretraining Effect", fontweight="bold", fontsize=14)
+    fig.tight_layout(pad=0.3)
+    if save_path:
+        fig.savefig(save_path / "ablation_pretraining.pdf", bbox_inches="tight", pad_inches=0.02)
+        fig.savefig(save_path / "ablation_pretraining.png", bbox_inches="tight", pad_inches=0.02)
+    plt.close()
+
+
+def plot_capacity_ablation(ablation_data: dict, save_path: Path = None):
+    """Bar chart: model capacity vs accuracy with param count labels."""
+    fig, ax = plt.subplots(figsize=(7, 5))
+    names = ["TSception", "EEGNet"]
+    accs = [ablation_data["TSception"]["scratch"]["mean"],
+            ablation_data["EEGNet"]["scratch"]["mean"]]
+    errs = [ablation_data["TSception"]["scratch"]["std"],
+            ablation_data["EEGNet"]["scratch"]["std"]]
+    params = ["3,111,106", "2,834"]
+    colors = ["#e74c3c", "#2ecc71"]
+    bars = ax.bar(names, accs, yerr=errs, color=colors, capsize=8,
+                  edgecolor="black", linewidth=0.8, width=0.5)
+    ax.axhline(y=0.5, color="gray", linestyle="--", alpha=0.4, linewidth=1, label="Chance (50%)")
+    ax.set_ylabel("5-fold CV Accuracy", fontsize=13)
+    ax.set_ylim(0.48, max(accs) + 0.08)
+    for bar, acc, ps in zip(bars, accs, params):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
+                f"{acc:.1%}", ha="center", fontsize=13, fontweight="bold")
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height()/2,
+                f"{ps}\nparams", ha="center", fontsize=10, color="white", fontweight="bold")
+    ax.set_title("Ablation — Model Capacity", fontweight="bold", fontsize=14)
+    fig.tight_layout(pad=0.3)
+    if save_path:
+        fig.savefig(save_path / "ablation_capacity.pdf", bbox_inches="tight", pad_inches=0.02)
+        fig.savefig(save_path / "ablation_capacity.png", bbox_inches="tight", pad_inches=0.02)
+    plt.close()
+
+
+def generate_feature_table(feature_names: list, importances: np.ndarray,
+                           top_n: int = 15, save_path: Path = None):
+    """Print LaTeX-formatted feature importance table rows."""
+    idx = np.argsort(importances)[::-1][:top_n]
+    lines = []
+    for rank, i in enumerate(idx, 1):
+        name = feature_names[i]
+        score = importances[i]
+        lines.append(f"    {name} & {score:,} \\\\")
+    latex = "\n".join(lines)
+    if save_path:
+        (save_path / "feature_table.tex").write_text(latex)
+    return latex
 
 
 if __name__ == "__main__":
@@ -194,5 +278,43 @@ if __name__ == "__main__":
     if results:
         print(f"Plotting CV comparison ({len(results)} models)")
         plot_cv_comparison(results, figures_dir)
+
+    # 5. Ablation figures
+    ablation = {}
+    for key, subdir in [
+        ("TSception", "logs_scratch"),
+        ("EEGNet", "logs_eegnet_scratch"),
+    ]:
+        data = load_folds(ckpt_dir / subdir)
+        if data:
+            ablation[key] = {"scratch": {"mean": data["mean"], "std": data["std"]}}
+    for key, subdir in [
+        ("TSception", "logs_pretrained"),
+        ("EEGNet", "logs_eegnet_pretrained"),
+    ]:
+        data = load_folds(ckpt_dir / subdir)
+        if data:
+            ablation[key]["pretrained"] = {"mean": data["mean"], "std": data["std"]}
+
+    if all(k in ablation for k in ["TSception", "EEGNet"]):
+        print("Plotting pretraining ablation")
+        plot_pretraining_ablation(ablation, figures_dir)
+        print("Plotting capacity ablation")
+        plot_capacity_ablation(ablation, figures_dir)
+
+    # 6. Feature importance LaTeX table
+    if lgb_log.exists():
+        d = np.load(lgb_log)
+        mean_imp = d["importances"].mean(axis=0)
+        top_n = 15
+        idx = np.argsort(mean_imp)[::-1][:top_n]
+        lines = []
+        for rank, i in enumerate(idx, 1):
+            name = d["feature_names"][i]
+            score = int(mean_imp[i])
+            lines.append(f"    {name} & {score:,} \\\\")
+        table_tex = "\n".join(lines)
+        (figures_dir / "feature_table.tex").write_text(table_tex, encoding="utf-8")
+        print(f"Feature importance table → {figures_dir / 'feature_table.tex'}")
 
     print(f"Figures saved to {figures_dir}")
