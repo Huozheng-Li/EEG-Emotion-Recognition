@@ -30,7 +30,8 @@
       "PowerShell(D:\\\\Miniconda3\\\\envs\\\\11thbmedesign\\\\python -m src.utils.plot_architectures)",
       "Bash(D:Miniconda3envs11thbmedesignpython -c ' *)",
       "PowerShell(D:\\\\Miniconda3\\\\envs\\\\11thbmedesign\\\\python -m src.utils.plot_results)",
-      "PowerShell(D:\\\\Miniconda3\\\\envs\\\\11thbmedesign\\\\python -m src.utils.plot_results 2>&1)"
+      "PowerShell(D:\\\\Miniconda3\\\\envs\\\\11thbmedesign\\\\python -m src.utils.plot_results 2>&1)",
+      "Bash(grep -n '\\\\\\\\cite{' \"report/基于深度迁移学习与手工特征融合的脑电情绪识别方法.tex\")"
     ],
     "additionalDirectories": [
       "f:\\COMPETITION\\eeg_emotion_recog\\src"
